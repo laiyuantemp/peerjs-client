@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+</style>
+ <title>Basic P2P sharing</title>
+</head>
+<body>
+
+<script src="peerjs.js"></script>
+<script src="JQ.js"></script>
+
+<script>
+var peer, my_id;
+var log_div = "log_div";
+var data_div = "data_div";
+//var peer_server = "9000-peers-peerjsserver-n961p7eg7z4.ws-us54.gitpod.io";
+var peer_server = "ly-peerjs.herokuapp.com";
+
+var conn_data = [];
+var conned_data_id = [];
+
+var conn_call = [];
+var conn_call_id = [];
+
+function conn_server(){
+	//peer = new Peer();
+	peer = new Peer(undefined, {
+	  host: peer_server,
+	  port: 443,
+	  path: "/",
+	});
+	peer.on('open', function(id) {
+		document.getElementById('my_id').innerHTML = id;
+		my_id = id;
+	  });
+	peer.on('connection', function(conn) {
+	  conn.on('data', function(data){
+	    // Will print 'hi!'
+	    switch(data.charAt(0)){
+	    case 'c': //connect to peer
+		conn_peer(data.substring(1), 'r');
+		broadcast_data("b", data.substring(1));
+		break;
+	    case 'b': //bi-directional conntion
+		if(conned_data_id.indexOf(data.substring(1)) === -1 && data.substring(1) !== my_id){
+			conn_peer(data.substring(1), 'a');
+		}
+		break;
+	    default:
+		logging(data.substring(1), data_div);
+	    }
+	  });
+	});
+
+	//media channel
+	peer.on('call', function(call) {
+
+	   if(conn_call_id.indexOf(call.peer) === -1){
+		    call.answer(); // Answer the call with an A/V stream.
+		    conn_call.push(call);
+		    conn_call_id.push(call.peer);
+		    create_video();
+		    call.on('stream', function(remoteStream) {
+				//alert(call.peer);
+			      // Show stream in some video/canvas element.
+				show_stream(remoteStream);
+				//alert("conn video: " + call.peer);	//tesing
+		    });
+	    }else{
+		call.close();
+		console.log("deny call: " + call.peer);
+	    }
+	});
+
+}
+
+function broadcast_data(type, message){
+	//	type; b: bi-directional connection	m: message
+	for(var i = 0; i < conn_data.length; i++){
+		conn_data[i].send(type + message);
+	}
+}
+
+function log_my_id(){
+	$.get(
+		  "https://testing.laiyuantemp.workers.dev/logging?name=peerjs&value=" + my_id,
+	      )
+}
+
+function conn_peer_from_box(element_id){
+	var id = document.getElementById(element_id).value;
+	conn_peer(id, 'a');
+	broadcast_data("b", id);
+	document.getElementById(element_id).value = "";
+}
+
+function conn_peer(id, mode){
+	var conn = peer.connect(id);
+
+	conn.on('open', function(){
+	  // here you have conn.id
+		if(mode === 'a'){ //a: active connection	//r: respond conn
+			conn.send("c" + my_id);
+		}
+		conned_data_id.push(id);
+		conn_data.push(conn);
+		logging("connected: " + id, log_div);
+	});
+}
+
+function send_data(){
+	broadcast_data("m", document.getElementById('data_box').value);
+	document.getElementById('data_box').value = "";
+}
+
+function logging(log, div_id){
+	document.getElementById(div_id).innerHTML += log + "<br>";
+}
+
+	function broadcast_screen(){
+		var displayMediaOptions = {
+		    video: {
+			cursor: "always"
+		    },
+		    audio: true
+		};
+		navigator.mediaDevices.getDisplayMedia(displayMediaOptions)
+		.then(function (stream) {
+		    broadcast_stream(stream);
+		});
+	}
+
+	function broadcast_camera(){
+		var getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+		getUserMedia({video: true, audio: true}, function(stream) {
+		   broadcast_stream(stream);
+		}, function(err) {
+		  console.log('Failed to get local stream' ,err);
+		});
+	}
+
+	function broadcast_stream(stream){
+	   for(var i = 0; i < conned_data_id.length; i++){
+		call_stream(conned_data_id[i], stream);
+	   }
+	}
+
+	function call_stream(id, stream){
+	  	var call = peer.call(id, stream);
+		alert("call id: " + id);
+		alert("call_stream: " + stream);
+	}
+
+
+var stream_counter = 0;
+	function create_video(){
+		//create new frame if not found
+
+		var video = document.createElement('video');
+		video.setAttribute("id", "stream_" + stream_counter);
+		var container = document.createElement('div');
+		container.setAttribute("id", "stream_" + stream_counter + "_container");
+
+		container.innerHTML += "<button onclick=video_full_screen('stream_" + stream_counter + "')>full screen</button>";
+		container.appendChild(video);
+		document.getElementById('stream_div').appendChild(container);
+
+		set_video_size(video);
+		stream_counter++;
+	}
+	function show_stream(stream){
+		alert(stream_counter);
+		var video = document.getElementById('stream_' + (stream_counter-1));
+		video.autoplay = true;
+		video.controls = false;
+		video.srcObject = stream;
+	}
+
+
+function set_video_size(video){
+	video.setAttribute("height", window.innerHeight*0.5);
+	video.setAttribute("width", window.innerWidth*0.5);
+}
+
+
+function resize_all_stream(){
+	for(var i = 0; i < stream_counter; i++){
+		var video = document.getElementById("stream_" + i);
+		if(video){
+			set_video_size(video);
+		}
+	}
+}
+
+function video_full_screen(id) {
+  var element = document.getElementById(id);
+  if (element.requestFullscreen) {
+    element.requestFullscreen();
+  } else if (element.mozRequestFullScreen) {
+    element.mozRequestFullScreen();
+  } else if (element.webkitRequestFullscreen) {
+    element.webkitRequestFullscreen();
+  } else if (element.msRequestFullscreen) {
+    element.msRequestFullscreen();
+  } else {
+    element.classList.toggle('fullscreen');
+  }
+}
+
+</script>
+broker server at<div id="server_host_div"></div>
+<button onclick=conn_server()>conn server</button>
+<br><br>
+<br>
+<button onclick=log_my_id()>log my id</button>
+<br>my id: <div id="my_id"></div>
+<br>
+
+<form id='id_form'>
+<input id='id_box' placeholder="Enter peer id">
+<input type="submit" value="conn peer">
+</form>
+<br><br><br>
+
+<form id='data_box_form'>
+<input id='data_box'>
+<input type="submit" value="send data">
+</form>
+<br>
+
+sharing: <button onclick=broadcast_camera()>broadcast camera</button>
+<button onclick=broadcast_screen()>broadcast screen</button>
+<br>
+<br>
+<br>
+~~~
+<button onclick=resize_all_stream()>resize all stream window</button>
+<div id="stream_div"></div>
+<br>
+~~~
+--data channel--<button onclick="clear_div('data_div')">clear</button>
+<div id="data_div"></div>
+<br>
+--log--<button onclick="clear_div('log_div')">clear</button>
+<div id="log_div"></div>
+
+<br>
+
+
+
+<script>
+
+	function clear_div(div_id){
+		document.getElementById(div_id).innerHTML = "";
+	}
+	function new_server(){
+		document.getElementById('server_host_div').innerHTML = peer_server;
+		document.getElementById('my_id').innerHTML = "..connect server to get id..";
+		conn_server();
+	}
+
+	window.onload = function(){
+		new_server();
+
+		$("#id_form").submit(function(event){
+		  conn_peer_from_box('id_box')
+		  event.preventDefault();
+		});
+		$("#data_box_form").submit(function(event){
+		  send_data();
+		  event.preventDefault();
+		});
+		$("#peer_server_url_form").submit(function(event){
+		  peer_server = document.getElementById('peer_server_url_box').value;
+		  document.getElementById('peer_server_url_box').value = "";
+		  new_server();
+		  event.preventDefault();
+		});
+	};
+</script>
+
+
+
+<br><br><br><br><br><br><br><br><br><br>
+<form id='peer_server_url_form'>
+<input id='peer_server_url_box'>
+<input type="submit" value="use another broker server">
+</form>
+<br>
+<br>
+<small>This is a learning project, maybe buggy</small><br>
+<small>my note: <div id="video_div"> source src="https://drive.google.com/uc?export=download&id=" type='video/mp4'</div><br></small>
+</body>
+</html>
