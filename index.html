@@ -26,7 +26,7 @@ function conn_server(){
 	//peer = new Peer();
 	peer = new Peer(undefined, {
 	  host: peer_server,
-	  port: 443,
+	  port: 80,
 	  path: "/",
 	});
 	peer.on('open', function(id) {
