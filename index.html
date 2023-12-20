@@ -15,6 +15,7 @@ var peer, my_id;
 var log_div = "log_div";
 var data_div = "data_div";
 var peer_server = "https://laiyuantemp-peerserver.glitch.me";
+var WEBHOOK_URL = 'https://localhost';
 
 var conn_data = [];
 var conned_data_id = [];
@@ -83,7 +84,7 @@ function broadcast_data(type, message){
 
 function log_my_id(){
 	$.get(
-		  "https://testing.laiyuantemp.workers.dev/logging?name=peerjs&value=" + my_id,
+		  WEBHOOK_URL + my_id,
 	      )
 }
 
